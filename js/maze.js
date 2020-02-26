@@ -1,4 +1,4 @@
-/*
+﻿/*
  * This is an enumerated type to hold the types of cells required to represent a maze.
  */
 MazeCellTypes = {
@@ -18,7 +18,11 @@ class MazeCell {
 		this.priority = Infinity;
 	}
 
-	projection() {
+	/*
+	 * returns a string of the maze cell type and location
+	 * (will be used like a Map in Java)
+	 */
+    projection() {
 		var projection = '';
 		if (this.type === MazeCellTypes.WALL) {
 			projection = "WALL cell at "
@@ -34,9 +38,10 @@ class MazeCell {
 
 class Maze {
 	/* 
-	 *this function constructs the maze object, and accepts an argument,
-	 * plainTextMaze, which is an nxn string representation of a maze
-	 * with each cell described by single-character MazeCellTypes.
+	 *this function constructs the maze object, a 2D array of chars, and
+	 * accepts an argument, plainTextMaze, which is an nxn string
+	 * representation of a maze with each cell described by single-character
+	 * MazeCellTypes.
 	 */
 
 	constructor(plainTextMaze) {
@@ -53,12 +58,15 @@ class Maze {
 			}
 		}
 
+		// start and destination can be hard coded since there will always
+		// be one path from any one point to another in a perfect maze
 		this.start = this.maze[1][0];
 		this.destination = this.maze[this.maze.length - 2][this.maze[0].length - 1];
 	}
 
 	/*
-	 * this function determines whether the argument cell meets the destination criteria
+	 * this function determines whether the argument cell has the same row
+	 * and column as the the destination cell, i.e. whether the end has been reached
 	 */
 	destinationPredicate(cell) {
 		if (this.destination.row === cell.row && this.destination.col == cell.col)
@@ -74,26 +82,29 @@ class Maze {
 	getNeighbors(cell) {
 		var neighbors = [];
 
-		if (cell.row - 1 >= 0 &&
-			this.maze[cell.row - 1][cell.col].type === MazeCellTypes.PASSAGEWAY) {
-			neighbors.push(this.maze[cell.row - 1][cell.col]);
-		}
-
-		if (cell.col - 1 >= 0 &&
-			this.maze[cell.row][cell.col - 1].type === MazeCellTypes.PASSAGEWAY) {
-			neighbors.push(this.maze[cell.row][cell.col - 1]);
-		}
-
+		// checks neighbor below
 		if (cell.row + 1 < this.maze.length &&
 			this.maze[cell.row + 1][cell.col].type === MazeCellTypes.PASSAGEWAY) {
 			neighbors.push(this.maze[cell.row + 1][cell.col])
 		}
 
+        // checks neighbor to the right
 		if (cell.col + 1 < this.maze[cell.row].length &&
 			this.maze[cell.row][cell.col + 1].type === MazeCellTypes.PASSAGEWAY) {
 			neighbors.push(this.maze[cell.row][cell.col + 1]);
 		}
 
+        // checks neighbor above
+        if (cell.row - 1 >= 0 &&
+            this.maze[cell.row - 1][cell.col].type === MazeCellTypes.PASSAGEWAY) {
+            neighbors.push(this.maze[cell.row - 1][cell.col]);
+        }
+
+        // checks neighbor to the left
+        if (cell.col - 1 >= 0 &&
+            this.maze[cell.row][cell.col - 1].type === MazeCellTypes.PASSAGEWAY) {
+            neighbors.push(this.maze[cell.row][cell.col - 1]);
+        }
 		return neighbors;
 	}
 
@@ -117,6 +128,9 @@ class Maze {
 		// create a map to hold cells to parents, set first element's
 		// parents as false (is source cell). Generally, the parents
 		// map will have projection values as keys and objects as values.
+		// The map will be used to backtrack through MazeCell objects whose type
+		// will be changed to SOLUTION until the source cell with value false is
+		// reached
 		var parents = new Array();
 		parents[this.start.projection()] = false;
 
@@ -171,8 +185,62 @@ class Maze {
 	 * with the type MazeCellTypes.SOLUTION. 
 	 */
 	solveMazeDFS() {
-		// TODO
-	}
+		// store the nodes that may become the solution path on a stack
+		var stack = new Array();
+		stack.push(this.start);
+
+		// make set for visited cells and add the starting one
+		var visited = new Set();
+        visited.add(this.start.projection());
+
+		// "peek" the current stack and make it the starting cell
+        var current = stack[stack.length - 1];
+        var neighbors;
+		var flag;
+
+		// do this until the destination is reached
+        while (!this.destinationPredicate(current)) {
+			flag = true;
+
+			neighbors = this.getNeighbors(current);
+			for (var i = 0; i < neighbors.length; i++) {
+				// take the first cell of the neighbors
+                var neighbor = neighbors[i];
+
+                // see if we haven't visited the cell
+				if (!visited.has(neighbor)) {
+                    // if we haven't visited, add it to the visited set
+                    visited.add(neighbor);
+
+					// add the cell onto the stack of the potential solution
+					stack.push(neighbor);
+
+					// update the current cell to find its neighbors in the next loop
+					current = neighbor;
+
+					// since we found an unvisited neighbor, go back to beginning of while
+					// loop and keep finding neighbors
+                    flag = false;
+                    break;
+				}
+
+			}
+
+			// if we're at a dead end or all of the neighbors have been visited,
+			// pop a cell off and assign the current cell to the last one in the stack
+			if (neighbors.length < 1 || flag) {
+				stack.pop();
+				current = stack[stack.length - 1];
+            }
+		}
+
+		// if the destination is found, mark each one in the stack as a solution tile
+		if (this.destinationPredicate(current)) {
+			for (var i = 0; i < stack.length; i++) {
+                stack[i].type = MazeCellTypes.SOLUTION;
+            }
+        }
+    }
 	
 	/*
 	 * this function uses a Dijkstra's algorithm to solve the maze. When the solution
@@ -219,3 +287,25 @@ class Maze {
 	}
 
 }
+
+/*
+ * 6. On average, the BFS visited 297.5 more cells than the DFS
+ *
+ * 7. Considering every possible graph, DFS and BFS would technically average out to have the same performance
+ * But, the average cases is much more consistent with BFS, so in the informal sense of the "average case"
+ * BFS is better.
+ *
+ * 8. The getNeighbors() ordering would be right, down, up, left.
+ *
+ * The 7x7 border maze that would present a best case scenario for DFS with this ordering is:
+ *
+ * ■ ■ ■ ■ ■ ■ ■
+ *     ■       ■
+ * ■   ■   ■   ■
+ * ■   ■   ■   ■
+ * ■   ■   ■   ■
+ * ■   
+ * ■ ■ ■ ■ ■ ■ ■
+ *
+ */
+
